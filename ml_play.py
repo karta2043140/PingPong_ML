@@ -25,7 +25,8 @@ def ml_loop(side: str):
         scene_info = comm.recv_from_game()
         if scene_info["status"] != "GAME_ALIVE":
             #reset
-
+            platform_target = scene[0] / 2
+            
             #restart
             comm.ml_ready()
             continue
@@ -48,7 +49,7 @@ def ml_loop(side: str):
         blocker_speed = scene_info["blocker"][0] - pre_blocker_x
         if blocker_speed == 0:
             blocker_speed = 5
-        
+
         if side == "1P":
             platform_x = scene_info["platform_1P"][0] + platform[0] / 2
             if scene_info["ball"][1] + ball[1] + scene_info["ball_speed"][1] >= platform_1P:
@@ -61,7 +62,7 @@ def ml_loop(side: str):
                     next_blocker_x = scene[0] - blocker[0]
                     next_blocker_speed = -next_blocker_speed
                 next_ball_x = scene_info["ball"][0] + scene_info["ball_speed"][0]
-                next_ball_speed = scene_info["ball_speed"][0]
+                next_ball_speed = (scene_info["ball_speed"][0] / abs(scene_info["ball_speed"][0])) * abs(scene_info["ball_speed"][1])
                 if next_ball_x <= 0:
                     next_ball_x = 0
                     next_ball_speed = -next_ball_speed
@@ -105,18 +106,21 @@ def ml_loop(side: str):
                     else:
                         comm.send_to_game({"frame": scene_info["frame"], "command": "NONE"})
                 continue
-            elif scene_info["ball_speed"][1] > 0 and pre_ball_speed <= 0: #my
+            elif scene_info["ball_speed"][1] > 0 and pre_ball_speed <= 0:
                 temp = ball_move_predict(scene_info["frame"] - ballServeFrame, scene_info["ball"][0], scene_info["ball"][1], scene_info["ball_speed"][0], scene_info["ball_speed"][1], scene_info["blocker"][0], blocker_speed)
                 if temp[0]:
                     platform_target = predict(temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8])
                 else:
                     platform_target = temp[1]
-            elif scene_info["ball_speed"][1] < 0 and pre_ball_speed >= 0: #enemy
+            elif scene_info["ball_speed"][1] < 0 and pre_ball_speed >= 0:
                 temp = ball_move_predict(scene_info["frame"] - ballServeFrame, scene_info["ball"][0], scene_info["ball"][1], scene_info["ball_speed"][0], scene_info["ball_speed"][1], scene_info["blocker"][0], blocker_speed)
                 if temp[0]:
                     platform_target = temp[1]
                 else:
                     platform_target = predict(temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8])
+            elif scene_info["ball_speed"][1] > 0 and scene_info["ball"][1] + ball[1] >= blocker_y + blocker[1]:
+                temp = ball_move_predict(scene_info["frame"] - ballServeFrame, scene_info["ball"][0], scene_info["ball"][1], scene_info["ball_speed"][0], scene_info["ball_speed"][1], scene_info["blocker"][0], blocker_speed)
+                platform_target = temp[1]
         else:
             platform_x = scene_info["platform_2P"][0] + platform[0] / 2
             if scene_info["ball"][1] + scene_info["ball_speed"][1] <= platform_2P:
@@ -129,7 +133,7 @@ def ml_loop(side: str):
                     next_blocker_x = scene[0] - blocker[0]
                     next_blocker_speed = -next_blocker_speed
                 next_ball_x = scene_info["ball"][0] + scene_info["ball_speed"][0]
-                next_ball_speed = scene_info["ball_speed"][0]
+                next_ball_speed = (scene_info["ball_speed"][0] / abs(scene_info["ball_speed"][0])) * abs(scene_info["ball_speed"][1])
                 if next_ball_x <= 0:
                     next_ball_x = 0
                     next_ball_speed = -next_ball_speed
@@ -185,6 +189,9 @@ def ml_loop(side: str):
                     platform_target = temp[1]
                 else:
                     platform_target = predict(temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8])
+            elif scene_info["ball_speed"][1] < 0 and scene_info["ball"][1] <= blocker_y:
+                temp = ball_move_predict(scene_info["frame"] - ballServeFrame, scene_info["ball"][0], scene_info["ball"][1], scene_info["ball_speed"][0], scene_info["ball_speed"][1], scene_info["blocker"][0], blocker_speed)
+                platform_target = temp[1]
 
         pre_blocker_x = scene_info["blocker"][0]
         pre_ball_speed = scene_info["ball_speed"][1]
@@ -223,7 +230,7 @@ def ball_move_predict(frame: int, pos_x: int, pos_y: int, speed_x: int, speed_y:
             if blocker_pos <= 0:
                 blocker_pos = 0
                 blocker_speed = -blocker_speed
-            elif blocker_pos + blocker[0] > scene[0]:
+            elif blocker_pos + blocker[0] >= scene[0]:
                 blocker_pos = scene[0] - blocker[0]
                 blocker_speed = -blocker_speed
             pre_x = pos_x
@@ -253,7 +260,7 @@ def ball_move_predict(frame: int, pos_x: int, pos_y: int, speed_x: int, speed_y:
                         if blocker_pos <= 0:
                             blocker_pos = 0
                             blocker_speed = -blocker_speed
-                        elif blocker_pos + blocker[0] > scene[0]:
+                        elif blocker_pos + blocker[0] >= scene[0]:
                             blocker_pos = scene[0] - blocker[0]
                             blocker_speed = -blocker_speed
                         pre_speed = (speed_x, speed_y)
@@ -299,7 +306,7 @@ def ball_move_predict(frame: int, pos_x: int, pos_y: int, speed_x: int, speed_y:
             if blocker_pos <= 0:
                 blocker_pos = 0
                 blocker_speed = -blocker_speed
-            elif blocker_pos + blocker[0] > scene[0]:
+            elif blocker_pos + blocker[0] >= scene[0]:
                 blocker_pos = scene[0] - blocker[0]
                 blocker_speed = -blocker_speed
             pre_x = pos_x
@@ -322,14 +329,14 @@ def ball_move_predict(frame: int, pos_x: int, pos_y: int, speed_x: int, speed_y:
                         speed_x = -speed_x
                     if (frame % 100) == 0:
                         speed_x = speed_up(speed_x)
-                        speed_y = speed_y + 1
+                        speed_y = speed_y - 1
                     frame = frame + 1
                     while pos_y > platform_2P:
                         blocker_pos = blocker_pos + blocker_speed
                         if blocker_pos <= 0:
                             blocker_pos = 0
                             blocker_speed = -blocker_speed
-                        elif blocker_pos + blocker[0] > scene[0]:
+                        elif blocker_pos + blocker[0] >= scene[0]:
                             blocker_pos = scene[0] - blocker[0]
                             blocker_speed = -blocker_speed
                         pre_speed = (speed_x, speed_y)
